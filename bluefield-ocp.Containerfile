@@ -141,10 +141,10 @@ RUN if [ "$KERNEL_TYPE" = "64k" ]; then \
   echo "Installing 64k kernel variant..." && \
   KVER=$(rpm -q kernel-core --queryformat '%{VERSION}-%{RELEASE}') && \
   dnf install -y --setopt=install_weak_deps=False \
-    kernel-64k-core-${KVER} \
-    kernel-64k-modules-${KVER} \
-    kernel-64k-modules-core-${KVER} \
-    kernel-64k-modules-extra-${KVER} && \
+  kernel-64k-core-${KVER} \
+  kernel-64k-modules-${KVER} \
+  kernel-64k-modules-core-${KVER} \
+  kernel-64k-modules-extra-${KVER} && \
   rpm -e --nodeps kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra; \
   fi
 
@@ -311,6 +311,7 @@ RUN chmod +x /usr/bin/install-rhcos.sh; \
   systemctl enable acpid.service || true; \
   systemctl enable mlx_ipmid.service || true; \
   systemctl enable set_emu_param.service || true; \
+  systemctl enable mst.service || true; \
   bash /opt/mellanox/bfb/infojson.sh > /opt/mellanox/bfb/info.json
 
 # Finalize the container image

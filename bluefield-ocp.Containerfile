@@ -300,6 +300,15 @@ RUN --mount=type=bind,source=assets,target=/tmp/assets \
   # Patch Openvswitch permissions (Workaround)
   sed -i '/OVS_USER_ID/c\OVS_USER_ID="root:root"' /etc/sysconfig/openvswitch && \
   sed -i '/su/c\su root root' /etc/logrotate.d/openvswitch && \
+  # Change log paths
+  sed -i 's/\/run\/log/\/var\/log/i' /etc/logrotate.d/set_emu_param && \
+  sed -i 's/\/run\/log/\/var\/log/i' /etc/logrotate.d/mlx_ipmid && \
+  sed -i 's/\/run\/log/\/var\/log/i' /etc/rsyslog.d/set_emu_param.conf && \
+  sed -i 's/\/run\/log/\/var\/log/i' /etc/rsyslog.d/mlx_ipmid.conf && \
+  sed -i 's/\/run\/log/\/var\/log/i' /usr/bin/mlx_ipmid_init.sh && \
+  sed -i 's/\/run\/log/\/var\/log/i' /usr/lib/systemd/system/set_emu_param.service && \
+  sed -i 's/\/run\/log/\/var\/log/i' /usr/lib/systemd/system/mlx_ipmid.service && \
+  #
   # Create a directory for BFB update scripts and copy assets
   mkdir -p /opt/mellanox/bfb && \
   cp /tmp/assets/bfb-build/common/install.env/atf-uefi /opt/mellanox/bfb/ && \

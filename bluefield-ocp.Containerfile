@@ -240,6 +240,14 @@ RUN --mount=type=bind,source=assets,target=/tmp/assets \
   sed -i 's/\/run\/log/\/var\/log/i' /usr/bin/mlx_ipmid_init.sh && \
   sed -i 's/\/run\/log/\/var\/log/i' /usr/lib/systemd/system/set_emu_param.service && \
   sed -i 's/\/run\/log/\/var\/log/i' /usr/lib/systemd/system/mlx_ipmid.service && \
+  # Plant the pre-built ipmi_sim SDR persistence file.
+  # ipmi_sim (mlx-OpenIPMI) does not auto-generate SDR records from the .emu
+  # configuration at runtime on RHCOS; it only reads a pre-existing persistence
+  # file. Without it the SDR repo stays empty, no SoC-derived sensor values
+  # (soc_power, bluefield_temp, power_envelope) are pushed to the BMC over IPMB,
+  # and both ipmitool and Redfish return Reading: null for those sensors.
+  mkdir -p /var/ipmi_sim/mellanox && \
+  install -m 644 /tmp/assets/ipmi/sdr.30.main /var/ipmi_sim/mellanox/sdr.30.main && \
   #
   # Create a directory for BFB update scripts and copy assets
   mkdir -p /opt/mellanox/bfb && \

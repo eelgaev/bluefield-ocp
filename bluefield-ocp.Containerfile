@@ -256,8 +256,9 @@ RUN chmod +x /usr/bin/install-rhcos.sh; \
 
 # Finalize the container image
 RUN set -xe; kver=$(ls /usr/lib/modules); env DRACUT_NO_XATTR=1 dracut -vf /usr/lib/modules/$kver/initramfs.img "$kver"; \
-  ldconfig && \
+  sed -i 's|/opt/mellanox|/usr/opt/mellanox|g' /etc/ld.so.conf.d/*.conf; \
   rm /opt && ln -s /var/opt /opt; \
+  ldconfig && \
   dnf clean all -y && \
   rm -rf /var/cache/* /var/log/* /etc/machine-id && \
   find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en' ! -name 'en_US' -exec rm -rf {} + && \

@@ -11,73 +11,7 @@ ARG D_OFED_VERSION
 ARG KERNEL_TYPE=default
 
 
-FROM ${BUILDER_IMAGE} AS builder
 
-ARG D_DOCA_VERSION
-ARG D_OFED_VERSION
-ARG KERNEL_TYPE=default
-
-
-# Full URL to the MLNX_OFED_SRC-<ver>.tgz tarball.
-ARG DOCA_SOURCES_URL="https://linux.mellanox.com/public/repo/doca/${D_DOCA_VERSION}/SOURCES/mlnx_ofed/MLNX_OFED_SRC-${D_OFED_VERSION}.tgz"
-# URL to a directory listing of BlueField SoC source RPMs (must serve directory
-# index, e.g. an Apache/nginx autoindex).  The directory is fetched recursively
-# and the package whitelist below is filtered out of it.
-ARG SOC_SOURCES_URL="https://linux.mellanox.com/public/repo/doca/${D_DOCA_VERSION}/SOURCES/SoC/"
-
-WORKDIR /root
-
-RUN if [ "$KERNEL_TYPE" = "64k" ]; then \
-  KVER=$(ls /usr/lib/modules | grep 64k | head -n1); \
-  else \
-  KVER=$(ls /usr/lib/modules | grep -v 64k | head -n1); \
-  fi && \
-  echo "KVER=$KVER" >> /kernelver.env
-
-ARG D_OFED_SRC_ARCHIVE="MLNX_OFED_SRC-${D_OFED_SRC_TYPE}${D_OFED_VERSION}.tgz"
-
-RUN dnf install -y automake autoconf libtool perl && dnf clean all
-
-RUN wget --no-check-certificate -O ${D_OFED_SRC_ARCHIVE} ${DOCA_SOURCES_URL}
-
-RUN if file ${D_OFED_SRC_ARCHIVE} | grep compressed; then \
-  tar -xzf ${D_OFED_SRC_ARCHIVE}; \
-  else \
-  mv ${D_OFED_SRC_ARCHIVE}/MLNX_OFED_SRC-${D_OFED_VERSION} . ; \
-  fi
-
-RUN set -x && \
-  source /kernelver.env && \
-  perl /root/MLNX_OFED_SRC-${D_OFED_VERSION}/install.pl --without-depcheck --distro rhel --kernel ${KVER} --kernel-sources /lib/modules/${KVER}/build \
-  --kernel-only --build-only \
-  --with-iser --with-srp --with-isert --with-knem --with-xpmem --fwctl \
-  --with-mlnx-tools --with-ofed-scripts --copy-ifnames-udev
-
-RUN mkdir -p /build/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-
-ENV HOME=/build
-
-WORKDIR /root
-
-RUN SRPMS=("mlxbf-pka" "ipmb-host") && \
-  wget -r -np -nd -A rpm -e robots=off "${SOC_SOURCES_URL}" --accept-regex="$(IFS='|'; echo "(${SRPMS[*]/%/.+\.rpm})")"
-
-RUN source /kernelver.env && \
-  for package in *.src.rpm; do \
-  rpmbuild --rebuild $package --define 'KMP 1' --define "KVERSION $KVER" --define "_sourcedir $(pwd)" --define "debug_package %{nil}" || exit 1; \
-  rm -f $package; \
-  done
-
-RUN ls /root/MLNX_OFED_SRC-${D_OFED_VERSION}/RPMS/redhat-release-*/aarch64
-
-RUN cd /root/MLNX_OFED_SRC-${D_OFED_VERSION}/RPMS/redhat-release-*/aarch64 && \
-  rm -f *-devel*.rpm *-debugsource*.rpm *-debuginfo*.rpm *-source*.rpm && \
-  rm -f xpmem-*.rpm knem-*.rpm && \
-  mkdir /root/rpms && \
-  mv *.rpm /root/rpms && \
-  mv /build/rpmbuild/RPMS/aarch64/*.rpm /root/rpms && \
-  cd /root/rpms
-######################################################################
 
 FROM ${TARGET_IMAGE} AS base
 
@@ -100,8 +34,7 @@ ARG KERNEL_TYPE=default
 
 # Pin dnf releasever to the exact RHEL minor version (e.g. 9.6) from /etc/os-release
 # and enable EUS repos for exact kernel version matching
-RUN mkdir -p /tmp/rpms && \
-  source /etc/os-release && \
+RUN source /etc/os-release && \
   echo "${VERSION_ID}" > /etc/dnf/vars/releasever && \
   dnf config-manager --set-enabled rhel-9-for-aarch64-baseos-eus-rpms && \
   dnf config-manager --set-enabled rhel-9-for-aarch64-appstream-eus-rpms
@@ -141,18 +74,17 @@ RUN if [ "$KERNEL_TYPE" = "64k" ]; then \
   echo "Installing 64k kernel variant..." && \
   KVER=$(rpm -q kernel-core --queryformat '%{VERSION}-%{RELEASE}') && \
   dnf install -y --setopt=install_weak_deps=False \
-    kernel-64k-core-${KVER} \
-    kernel-64k-modules-${KVER} \
-    kernel-64k-modules-core-${KVER} \
-    kernel-64k-modules-extra-${KVER} && \
+  kernel-64k-core-${KVER} \
+  kernel-64k-modules-${KVER} \
+  kernel-64k-modules-core-${KVER} \
+  kernel-64k-modules-extra-${KVER} && \
   rpm -e --nodeps kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra; \
   fi
 
-RUN --mount=type=bind,from=builder,source=/root/rpms,target=/tmp/rpms \
+RUN \
   # Setup /opt for package installations
   rm opt && mkdir -p usr/opt && ln -s usr/opt opt; \
   ls /tmp/rpms; \
-  rpm -ivh --nodeps /tmp/rpms/*.rpm && \
   #
   # Remove default packages
   dnf remove -y \

@@ -10,9 +10,6 @@ ARG D_DOCA_BASEURL_AUTH_CREDS=
 ARG D_OFED_VERSION
 ARG KERNEL_TYPE=default
 
-
-
-
 FROM ${TARGET_IMAGE} AS base
 
 ARG RHCOS_VERSION
@@ -94,31 +91,7 @@ RUN \
   geolite2-city \
   ose-azure-acr-image-credential-provider \
   ose-aws-ecr-image-credential-provider \
-  ose-gcp-gcr-image-credential-provider; \
-  #
-  # # Install doca-runtime meta packages without their dependencies
-  cd /tmp; \
-  dnf download doca-runtime doca-runtime-kernel doca-runtime-user bf-release && \
-  rpm -ivh --nodeps \
-  doca-runtime-kernel-${D_DOCA_VERSION}*.$(uname -m).rpm \
-  doca-runtime-user*.$(uname -m).rpm \
-  doca-runtime-${D_DOCA_VERSION}*.$(uname -m).rpm; \
-  ## doca-runtime-kernel and doca-devel-kernel are still tied to specific kernel, but we compiled these on our own, so we ignore the specific version dependency
-  ## doca-runtime-user requires it's own doca-openvswitch packages, and requires bf-release
-  #
-  # Install bf-release in a hacky way until we have a proper bf-release package
-  cd /tmp; \
-  dnf download bf-release && \
-  mkdir /tmp/bf-release && \
-  rpm --notriggers --replacefiles --justdb -ivh --nodeps bf-release-*.aarch64.rpm && \
-  rpm2cpio bf-release-*.aarch64.rpm | cpio -idm -D /tmp/bf-release; \
-  rm -rf /tmp/bf-release/var /tmp/bf-release/usr/lib/systemd /tmp/bf-release/usr/share /tmp/bf-release/etc/sysconfig \
-  /tmp/bf-release/etc/NetworkManager \
-  /tmp/bf-release/etc/crictl* /tmp/bf-release/etc/kubelet.d /tmp/bf-release/etc/cni; \
-  cp -rnv /tmp/bf-release/* /; \
-  echo "bf-bundle-${D_DOCA_VERSION}_rhcos${RHCOS_VERSION}" > /etc/mlnx-release; \
-  #
-  dnf clean all
+  ose-gcp-gcr-image-credential-provider;
 
 RUN dnf -y install --setopt=install_weak_deps=False \
   doca-runtime \
@@ -256,8 +229,7 @@ RUN --mount=type=bind,source=assets,target=/tmp/assets \
   cp /tmp/assets/bfb-build/common/install.env/nic-fw /opt/mellanox/bfb/ && \
   cp /tmp/assets/infojson.sh /opt/mellanox/bfb/infojson.sh
 
-RUN chmod +x /usr/bin/install-rhcos.sh; \
-  systemctl enable acpid.service || true; \
+RUN systemctl enable acpid.service || true; \
   systemctl enable mlx_ipmid.service || true; \
   systemctl enable set_emu_param.service || true; \
   bash /opt/mellanox/bfb/infojson.sh > /opt/mellanox/bfb/info.json

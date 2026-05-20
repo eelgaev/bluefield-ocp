@@ -7,6 +7,12 @@ ARG D_DOCA_VERSION
 ARG D_DOCA_BASEURL
 ARG D_DOCA_BASEURL_AUTH=false
 ARG D_DOCA_BASEURL_AUTH_CREDS=
+ARG D_OFED_BASEURL=
+ARG D_OFED_BASEURL_AUTH=false
+ARG D_OFED_BASEURL_AUTH_CREDS=
+ARG D_SOC_BASEURL=
+ARG D_SOC_BASEURL_AUTH=false
+ARG D_SOC_BASEURL_AUTH_CREDS=
 ARG D_OFED_VERSION
 ARG KERNEL_TYPE=default
 
@@ -20,6 +26,12 @@ ARG D_DOCA_DISTRO
 ARG D_DOCA_BASEURL
 ARG D_DOCA_BASEURL_AUTH=false
 ARG D_DOCA_BASEURL_AUTH_CREDS
+ARG D_OFED_BASEURL=
+ARG D_OFED_BASEURL_AUTH=false
+ARG D_OFED_BASEURL_AUTH_CREDS=
+ARG D_SOC_BASEURL=
+ARG D_SOC_BASEURL_AUTH=false
+ARG D_SOC_BASEURL_AUTH_CREDS=
 ARG D_OFED_VERSION
 ARG IMAGE_TAG
 ARG COREOS_OPENCONTAINERS_IMAGE_VERSION
@@ -63,6 +75,58 @@ name=Nvidia DOCA repository
 baseurl=$REPO_URL
 gpgcheck=0
 enabled=1
+priority=99
+EOF
+
+# Optional OFED repo. When D_OFED_BASEURL is set, kernel-module OFED packages
+# (mlnx-ofa_kernel*, iser-kmod, isert-kmod, srp-kmod, mlnx-tools, ...) resolve
+# from this mirror in preference to DOCA. When unset, behavior is unchanged
+# and DOCA serves these packages as before.
+RUN --mount=type=secret,id=d-ofed-baseurl-auth-creds/username-and-password \
+  if [ -z "${D_OFED_BASEURL}" ]; then exit 0; fi; \
+  REPO_URL="${D_OFED_BASEURL}"; \
+  if [ "${D_OFED_BASEURL_AUTH}" = "true" ]; then \
+  if [ -f /run/secrets/d-ofed-baseurl-auth-creds/username-and-password ]; then \
+  OFED_CREDS=$(cat /run/secrets/d-ofed-baseurl-auth-creds/username-and-password); \
+  elif [ -n "${D_OFED_BASEURL_AUTH_CREDS}" ]; then \
+  OFED_CREDS="${D_OFED_BASEURL_AUTH_CREDS}"; \
+  fi; \
+  if [ -n "${OFED_CREDS}" ]; then \
+  REPO_URL=$(echo "${D_OFED_BASEURL}" | sed -E "s|(https?://)(.*)|\1${OFED_CREDS}@\2|"); \
+  fi; \
+  fi; \
+  cat <<EOF > /etc/yum.repos.d/ofed.repo
+[ofed]
+name=NVIDIA OFED repository
+baseurl=$REPO_URL
+gpgcheck=0
+enabled=1
+priority=10
+EOF
+
+# Optional SoC repo. When D_SOC_BASEURL is set, BlueField SoC kernel-module
+# packages (mlxbf-pka*, ipmb-host*) resolve from this mirror in preference to
+# DOCA. When unset, behavior is unchanged and DOCA serves these packages.
+RUN --mount=type=secret,id=d-soc-baseurl-auth-creds/username-and-password \
+  if [ -z "${D_SOC_BASEURL}" ]; then exit 0; fi; \
+  REPO_URL="${D_SOC_BASEURL}"; \
+  if [ "${D_SOC_BASEURL_AUTH}" = "true" ]; then \
+  if [ -f /run/secrets/d-soc-baseurl-auth-creds/username-and-password ]; then \
+  SOC_CREDS=$(cat /run/secrets/d-soc-baseurl-auth-creds/username-and-password); \
+  elif [ -n "${D_SOC_BASEURL_AUTH_CREDS}" ]; then \
+  SOC_CREDS="${D_SOC_BASEURL_AUTH_CREDS}"; \
+  fi; \
+  if [ -n "${SOC_CREDS}" ]; then \
+  REPO_URL=$(echo "${D_SOC_BASEURL}" | sed -E "s|(https?://)(.*)|\1${SOC_CREDS}@\2|"); \
+  fi; \
+  fi; \
+  cat <<EOF > /etc/yum.repos.d/soc.repo
+[soc]
+name=NVIDIA BlueField SoC repository
+baseurl=$REPO_URL
+gpgcheck=0
+enabled=1
+priority=10
 EOF
 
 WORKDIR /

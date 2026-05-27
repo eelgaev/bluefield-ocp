@@ -155,17 +155,24 @@ RUN \
   geolite2-city \
   ose-azure-acr-image-credential-provider \
   ose-aws-ecr-image-credential-provider \
-  ose-gcp-gcr-image-credential-provider;
-
-RUN dnf -y install python3-dnf-plugins-core
-
-# Pre-install bf-release before the main transaction so dnf finds it already
-# satisfied in the RPM DB and skips re-installing it — avoiding the cri-o
-# file conflict on /etc/crictl.yaml that only triggers during installation.
-# The %post script detects VARIANT_ID=coreos and removes the conflicting files.
-RUN dnf download -y --destdir=/tmp bf-release && \
-  rpm -ivh --replacefiles --nodeps /tmp/bf-release-*.aarch64.rpm && \
-  rm -f /tmp/bf-release-*.aarch64.rpm
+  ose-gcp-gcr-image-credential-provider; \
+  #
+  # Install dnf plugins to enable repository priority support
+  dnf -y install python3-dnf-plugins-core && \
+  #
+  # Install bf-release in a hacky way until we have a proper bf-release package
+  cd /tmp; \
+  dnf download bf-release && \
+  mkdir /tmp/bf-release && \
+  rpm --notriggers --replacefiles --justdb -ivh --nodeps bf-release-*.aarch64.rpm && \
+  rpm2cpio bf-release-*.aarch64.rpm | cpio -idm -D /tmp/bf-release; \
+  rm -rf /tmp/bf-release/var /tmp/bf-release/usr/lib/systemd /tmp/bf-release/usr/share /tmp/bf-release/etc/sysconfig \
+  /tmp/bf-release/etc/NetworkManager \
+  /tmp/bf-release/etc/crictl* /tmp/bf-release/etc/kubelet.d /tmp/bf-release/etc/cni; \
+  cp -rnv /tmp/bf-release/* /; \
+  echo "bf-bundle-${D_DOCA_VERSION}_rhcos${RHCOS_VERSION}" > /etc/mlnx-release; \
+  #
+  dnf clean all
 
 RUN dnf -y install --setopt=install_weak_deps=False \
   doca-runtime \
@@ -335,15 +342,15 @@ ARG release=22
 ARG version=v4
 
 LABEL com.redhat.component="bluefield-ocp-layer-rhel10" \
-      name="dpu-kit-for-nvidia-operator/bluefield-ocp-layer-rhel10" \
-      version="${version}" \
-      upstream-ref="${version}" \
-      upstream-url="https://github.com/rh-ecosystem-edge/bluefield-ocp" \
-      url="https://github.com/rh-ecosystem-edge/bluefield-ocp" \
-      summary="DPU Kit for NVIDIA Operator - Bluefield OCP Layer" \
-      io.k8s.display-name="DPU Kit for NVIDIA Operator - Bluefield OCP Layer" \
-      description="DPU Kit for NVIDIA Operator - Bluefield OCP Layer" \
-      io.k8s.description="DPU Kit for NVIDIA Operator - Bluefield OCP Layer" \
-      distribution-scope="public" \
-      release="${release}" \
-      cpe="cpe:/a:redhat:dpu_kit:4.22::el10"
+  name="dpu-kit-for-nvidia-operator/bluefield-ocp-layer-rhel10" \
+  version="${version}" \
+  upstream-ref="${version}" \
+  upstream-url="https://github.com/rh-ecosystem-edge/bluefield-ocp" \
+  url="https://github.com/rh-ecosystem-edge/bluefield-ocp" \
+  summary="DPU Kit for NVIDIA Operator - Bluefield OCP Layer" \
+  io.k8s.display-name="DPU Kit for NVIDIA Operator - Bluefield OCP Layer" \
+  description="DPU Kit for NVIDIA Operator - Bluefield OCP Layer" \
+  io.k8s.description="DPU Kit for NVIDIA Operator - Bluefield OCP Layer" \
+  distribution-scope="public" \
+  release="${release}" \
+  cpe="cpe:/a:redhat:dpu_kit:4.22::el10"

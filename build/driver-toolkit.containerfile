@@ -6,6 +6,13 @@ RUN \
   KERNEL_PKG_SUFFIX="${KERNEL_VERSION:+-${KERNEL_VERSION}}" && \
   rpm -qa | grep '^kernel' | xargs -r rpm -v -e --nodeps && \
   dnf install -y \
+  kernel${KERNEL_PKG_SUFFIX} \
+  kernel-core${KERNEL_PKG_SUFFIX} \
+  kernel-modules${KERNEL_PKG_SUFFIX} \
+  kernel-modules-core${KERNEL_PKG_SUFFIX} \
+  kernel-modules-extra${KERNEL_PKG_SUFFIX} \
+  kernel-devel${KERNEL_PKG_SUFFIX} \
+  kernel-devel-matched${KERNEL_PKG_SUFFIX} \
   kernel-64k${KERNEL_PKG_SUFFIX} \
   kernel-64k-core${KERNEL_PKG_SUFFIX} \
   kernel-64k-modules${KERNEL_PKG_SUFFIX} \

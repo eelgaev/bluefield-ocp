@@ -1,0 +1,95 @@
+#% desc: Install the common DOCA userspace package set
+RUN dnf -y install --setopt=install_weak_deps=False \
+  doca-runtime-user \
+  collectx-clxapi \
+  doca-apsh-config \
+  doca-bench \
+  doca-caps \
+  doca-comm-channel-admin \
+  doca-dms \
+  doca-openvswitch \
+  doca-openvswitch-ipsec \
+  doca-openvswitch-selinux-policy \
+  doca-openvswitch-test \
+  doca-pcc-counters \
+  doca-sdk-aes-gcm \
+  doca-sdk-apsh \
+  doca-sdk-argp \
+  doca-sdk-comch \
+  doca-sdk-common \
+  doca-sdk-compress \
+  doca-sdk-devemu \
+  doca-sdk-dma \
+  doca-sdk-dpa \
+  doca-sdk-dpdk-bridge \
+  doca-sdk-erasure-coding \
+  doca-sdk-eth \
+  doca-sdk-flow \
+  doca-sdk-pcc \
+  doca-sdk-rdma \
+  doca-sdk-sha \
+  doca-sdk-telemetry \
+  doca-sdk-telemetry-exporter \
+  doca-sdk-urom \
+  doca-socket-relay \
+  doca-sosreport \
+  dpa-stats \
+  dpcp \
+  flexio-sdk \
+  ibacm \
+  infiniband-diags \
+  infiniband-diags-compat \
+  libibumad \
+  libibverbs \
+  libibverbs-utils \
+  librdmacm \
+  librdmacm-utils \
+  libvma \
+  libvma-utils \
+  mft \
+  mft-oem \
+  mlnx-dpdk \
+  mlnx-ethtool \
+  mlnx-iproute2 \
+  mlx-OpenIPMI \
+  mlxbf-bfscripts \
+  {{ BOOTIMAGES_PACKAGE | default('mlxbf-bootimages-signed') }} \
+  {{ FW_PACKAGE | default('mlnx-fw-updater-signed') }} \
+  ofed-scripts \
+  opensm \
+  opensm-libs \
+  opensm-static \
+  perftest \
+  rdma-core \
+  srp_daemon \
+  ucx \
+  ucx-cma \
+  ucx-ib \
+  ucx-rdmacm \
+  acpid \
+  mstflint \
+  mft-autocomplete \
+  mmc-utils \
+  device-mapper \
+  lm_sensors \
+  efibootmgr \
+  i2c-tools \
+  ipmitool \
+  nvmetcli \
+  {{ BMC_FW_PACKAGES | default('bf3-bmc-fw-signed bf3-cec-fw-signed bf3-bmc-gi-signed bf3-bmc-nic-fw*') }} \
+  vim-common \
+  libpka \
+  libpka-engine \
+  libpka-testutils && \
+  dnf clean all && \
+  #
+  rpm -e --nodeps ngauge || true && \
+  rpm -e --nodeps spdk || true && \
+  rpm -e --nodeps doca-dms || true && \
+  rpm -e --nodeps libnl3-devel || true && \
+  rpm -e --nodeps kernel-headers || true && \
+  rpm -e --nodeps libzstd-devel || true && \
+  rpm -e --nodeps ncurses-devel || true && \
+  rpm -e --nodeps libpcap-devel || true && \
+  rpm -e --nodeps elfutils-libelf-devel || true && \
+  rpm -e --nodeps libyaml-devel || true

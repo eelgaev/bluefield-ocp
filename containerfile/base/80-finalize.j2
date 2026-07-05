@@ -1,0 +1,13 @@
+#% desc: Finalize: initramfs, /opt symlink, cleanup, ostree commit
+# Finalize the container image
+RUN set -xe; kver=$(ls /usr/lib/modules | sort -V | tail -1); env DRACUT_NO_XATTR=1 dracut -vf /usr/lib/modules/$kver/initramfs.img "$kver"; \
+  sed -i 's|/opt/mellanox|/usr/opt/mellanox|g' /etc/ld.so.conf.d/*.conf; \
+  rm /opt && ln -s /var/opt /opt; \
+  ldconfig && \
+  rm -f /etc/yum.repos.d/{doca,ofed,soc,epel}*.repo && \
+  dnf clean all -y && \
+  rm -rf /var/cache/* /var/log/* /etc/machine-id && \
+  find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en' ! -name 'en_US' -exec rm -rf {} + && \
+  rm -rf /usr/share/man /usr/share/doc /usr/share/vim && \
+  update-pciids && \
+  ostree container commit

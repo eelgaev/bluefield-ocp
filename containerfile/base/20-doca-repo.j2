@@ -1,0 +1,35 @@
+#% desc: NVIDIA DOCA dnf repository (with optional auth)
+{% set doca_url = D_DOCA_BASEURL | default('https://linux.mellanox.com/public/repo/doca/' + D_DOCA_VERSION + '/' +
+D_DOCA_DISTRO + '/arm64-dpu/') %}
+{% if D_DOCA_BASEURL_AUTH | default('false') == 'true' %}
+ARG D_DOCA_BASEURL_AUTH_CREDS=
+RUN --mount=type=secret,id=d-doca-baseurl-auth-creds/username-and-password \
+mkdir -p /tmp/rpms; \
+REPO_URL="{{ doca_url }}"; \
+if [ -f /run/secrets/d-doca-baseurl-auth-creds/username-and-password ]; then \
+DOCA_CREDS=$(cat /run/secrets/d-doca-baseurl-auth-creds/username-and-password); \
+elif [ -n "${D_DOCA_BASEURL_AUTH_CREDS}" ]; then \
+DOCA_CREDS="${D_DOCA_BASEURL_AUTH_CREDS}"; \
+fi; \
+if [ -n "$DOCA_CREDS" ]; then \
+REPO_URL=$(echo "$REPO_URL" | sed -E "s|(https?://)(.*)|\1${DOCA_CREDS}@\2|"); \
+fi; \
+cat <<EOF > /etc/yum.repos.d/doca.repo
+[doca]
+name=Nvidia DOCA repository
+baseurl=$REPO_URL
+gpgcheck=0
+enabled=1
+priority=99
+EOF
+{% else %}
+RUN mkdir -p /tmp/rpms && \
+cat <<EOF > /etc/yum.repos.d/doca.repo
+[doca]
+name=Nvidia DOCA repository
+baseurl={{ doca_url }}
+gpgcheck=0
+enabled=1
+priority=99
+EOF
+{% endif %}

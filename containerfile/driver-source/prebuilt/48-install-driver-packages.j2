@@ -1,0 +1,19 @@
+#% desc: Install prebuilt kernel-module (kmod-*) driver packages from repos
+# Driver packages resolved from the DOCA repositories (or the ofed-repo /
+# soc-repo optional mirrors).
+RUN dnf -y install --setopt=install_weak_deps=False \
+  # OFED Drivers:
+  mlnx-ofa_kernel \
+  kmod-mlnx-ofa_kernel \
+  kmod-iser \
+  kmod-isert \
+  kmod-srp \
+  kmod-kernel-mft-mlnx \
+  kmod-mlnx-nvme \
+  kmod-xpmem \
+  mlnx-tools \
+  # SOC Drivers:
+  kmod-mlxbf-pka \
+  kmod-ipmb-host && \
+  # 
+  dnf clean all

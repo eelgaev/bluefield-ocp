@@ -1,0 +1,13 @@
+#% desc: Optional 64k page-size kernel swap
+WORKDIR /
+{% if KERNEL_TYPE == '64k' %}
+
+RUN echo "Installing 64k kernel variant..." && \
+  KVER=$(rpm -q kernel-core --queryformat '%{VERSION}-%{RELEASE}') && \
+  dnf install -y --setopt=install_weak_deps=False \
+  kernel-64k-core-${KVER} \
+  kernel-64k-modules-${KVER} \
+  kernel-64k-modules-core-${KVER} \
+  kernel-64k-modules-extra-${KVER} && \
+  rpm -e --nodeps kernel kernel-core kernel-modules kernel-modules-core kernel-modules-extra
+{% endif %}

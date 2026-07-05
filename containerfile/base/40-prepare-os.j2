@@ -1,0 +1,32 @@
+#% desc: OS preparation: /opt relocation, remove default packages, bf-release
+RUN \
+  # Setup /opt for package installations
+  rm opt && mkdir -p usr/opt && ln -s usr/opt opt; \
+  ls /tmp/rpms; \
+  #
+  # Remove default packages
+  dnf remove -y \
+  # Replace openvswitch with doca-openvswitch
+  openvswitch-selinux-extra-policy openvswitch* \
+  # Remove unused big packages
+  geolite2-city \
+  ose-azure-acr-image-credential-provider \
+  ose-aws-ecr-image-credential-provider \
+  ose-gcp-gcr-image-credential-provider; \
+  #
+  # Install dnf plugins to enable repository priority support
+  dnf -y install python3-dnf-plugins-core && \
+  #
+  # Install bf-release in a hacky way until we have a proper bf-release package
+  cd /tmp; \
+  dnf download bf-release && \
+  mkdir /tmp/bf-release && \
+  rpm --notriggers --replacefiles --justdb -ivh --nodeps bf-release-*.aarch64.rpm && \
+  rpm2cpio bf-release-*.aarch64.rpm | cpio -idm -D /tmp/bf-release; \
+  rm -rf /tmp/bf-release/var /tmp/bf-release/usr/lib/systemd /tmp/bf-release/usr/share /tmp/bf-release/etc/sysconfig \
+  /tmp/bf-release/etc/NetworkManager \
+  /tmp/bf-release/etc/crictl* /tmp/bf-release/etc/kubelet.d /tmp/bf-release/etc/cni; \
+  cp -rnv /tmp/bf-release/* /; \
+  echo "bf-bundle-{{ D_DOCA_VERSION }}_rhcos{{ OCP_VERSION }}" > /etc/mlnx-release; \
+  #
+  dnf clean all

@@ -1,0 +1,32 @@
+#% desc: Dedicated NVIDIA BlueField SoC mirror repository
+#% requires: driver-source=prebuilt
+{% if D_SOC_BASEURL_AUTH | default('false') == 'true' %}
+ARG D_SOC_BASEURL_AUTH_CREDS=
+RUN --mount=type=secret,id=d-soc-baseurl-auth-creds/username-and-password \
+  REPO_URL="{{ D_SOC_BASEURL }}"; \
+  if [ -f /run/secrets/d-soc-baseurl-auth-creds/username-and-password ]; then \
+  SOC_CREDS=$(cat /run/secrets/d-soc-baseurl-auth-creds/username-and-password); \
+  elif [ -n "${D_SOC_BASEURL_AUTH_CREDS}" ]; then \
+  SOC_CREDS="${D_SOC_BASEURL_AUTH_CREDS}"; \
+  fi; \
+  if [ -n "$SOC_CREDS" ]; then \
+  REPO_URL=$(echo "$REPO_URL" | sed -E "s|(https?://)(.*)|\1${SOC_CREDS}@\2|"); \
+  fi; \
+  cat <<EOF > /etc/yum.repos.d/soc.repo
+[soc]
+name=NVIDIA BlueField SoC repository
+baseurl=$REPO_URL
+gpgcheck=0
+enabled=1
+priority=10
+EOF
+{% else %}
+RUN cat <<EOF > /etc/yum.repos.d/soc.repo
+[soc]
+name=NVIDIA BlueField SoC repository
+baseurl={{ D_SOC_BASEURL }}
+gpgcheck=0
+enabled=1
+priority=10
+EOF
+{% endif %}

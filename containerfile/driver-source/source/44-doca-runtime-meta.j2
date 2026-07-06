@@ -1,0 +1,8 @@
+#% desc: Install doca-runtime meta packages without dependency resolution
+RUN cd /tmp && \
+  dnf download doca-runtime doca-runtime-kernel doca-runtime-user && \
+  rpm -ivh --nodeps \
+  doca-runtime-kernel-{{ D_DOCA_VERSION }}*.$(uname -m).rpm \
+  doca-runtime-user*.$(uname -m).rpm \
+  doca-runtime-{{ D_DOCA_VERSION }}*.$(uname -m).rpm && \
+  rm -f /tmp/doca-runtime*.rpm

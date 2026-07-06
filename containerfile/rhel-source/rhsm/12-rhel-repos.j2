@@ -1,0 +1,10 @@
+#% desc: RHEL packages via host RHSM entitlements (default; dnf releasever pin)
+RUN source /etc/os-release && \
+  echo "${VERSION_ID}" > /etc/dnf/vars/releasever && \
+{% if KERNEL_TYPE == '64k' %}
+  dnf config-manager --set-enabled rhel-{{ RHEL_MAJOR }}-for-aarch64-baseos-eus-rpms && \
+  dnf config-manager --set-enabled rhel-{{ RHEL_MAJOR }}-for-aarch64-appstream-eus-rpms && \
+{% endif %}
+  dnf config-manager --set-enabled codeready-builder-for-rhel-{{ RHEL_MAJOR }}-aarch64-rpms && \
+  dnf config-manager --set-enabled rhel-{{ RHEL_MAJOR }}-for-aarch64-extensions-rpms && \
+  dnf config-manager --set-enabled rhel-{{ RHEL_MAJOR }}-for-aarch64-supplementary-rpms

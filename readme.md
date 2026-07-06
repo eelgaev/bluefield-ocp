@@ -5,12 +5,50 @@
 ### Container image build requirements
 
 - Podman
+- GNU Make and Python 3 (for generating the Containerfile)
+- `oc` (OpenShift CLI, used to resolve the RHCOS image from the release payload)
 - qemu-user-static-binfmt (needed for building on non-aarch64 machines)
 - Active Red Hat subscription and the `subscription-manager` package.
 
+## Generating the Containerfile
+
+The Containerfile is not checked in: it is generated into
+`bluefield-ocp.generated.Containerfile` (gitignored) from fragments under
+`containerfile/` by `scripts/generate.py` (Python 3 standard library only).
+`make build` regenerates it automatically; to generate it by hand:
+
+```bash
+make list                                     # show driver sources and optionals
+make generate                                 # default: prebuilt drivers from repos
+make generate DRIVER_SOURCE=source            # compile OFED/SoC kernel modules from source
+make generate OPTIONALS="ofed-repo soc-repo"  # enable optional features
+```
+
+(`make generate` wraps `./scripts/generate.py`, which can also be invoked
+directly — see `./scripts/generate.py --help`.)
+
+Fragments are concatenated in order of their numeric filename prefix, so a
+driver source or optional can contribute steps at any point of the file:
+
+- `containerfile/base/` — always included.
+- `containerfile/driver-source/<name>/` — exactly one, chosen with `DRIVER_SOURCE`:
+  - `prebuilt` (default) — kernel-module (kmod-*) packages installed from the
+    DOCA repositories.
+  - `source` — kernel modules compiled from source in a driver-toolkit builder
+    stage (`make build` prepares the builder image automatically, see below).
+- `containerfile/rhel-source/<name>/` — exactly one, chosen with `RHEL_SOURCE`:
+  - `rhsm` (default) — RHEL packages via the host's RHSM entitlements.
+  - `repo-file` — a user-provided repo file overrides
+    `/etc/yum.repos.d/redhat.repo`; pass it with `REDHAT_REPO=<path>` (it is
+    mounted as a podman secret, so it can live anywhere).
+- `containerfile/optionals/<name>/` — zero or more, chosen with `OPTIONALS`.
+  To add one, create the directory with a `NN-name.containerfile` file starting with a
+  `#% desc: ...` line (`#% requires:` / `#% conflicts:` constraints are also
+  supported); it is picked up automatically.
+
 ## Building the Image
 
-1. The project contains Mellanox's bfscripts as a git submoudle, so be sure to clone it as well:
+1. The project contains Mellanox's bfscripts as a git submodule, so be sure to clone it as well:
 
     ```bash
     git clone --recursive https://github.com/rh-ecosystem-edge/bluefield-ocp.git
@@ -22,34 +60,66 @@
     export PULL_SECRET=<path to pull secret file>
     ```
 
-3. Get the RHCOS release images from OCP release payload, in this example we use `4.22.0-rc.5`
+3. Generate the Containerfile and build the container image:
 
     ```bash
-    export RHCOS_VERSION="4.22.0-rc.5"
-    export TARGET_IMAGE=$(oc adm release info --image-for rhel-coreos-10 "quay.io/openshift-release-dev/ocp-release:"$RHCOS_VERSION"-aarch64")
+    make build                       # prebuilt drivers from repos
+    make build DRIVER_SOURCE=source  # compile kernel modules from source
     ```
 
-4. Set NVIDIA DOCA stack versions
+    `make` resolves the RHCOS image for the selected OpenShift release from the
+    release payload and tags the result as `bluefield-ocp:$OCP_VERSION-latest`.
 
-    Set Nvidia DPU stack versions:
+    With `DRIVER_SOURCE=source`, `make` first builds
+    `build/driver-toolkit.containerfile` as
+    `localhost/driver-toolkit:$OCP_VERSION` (against the exact kernel of the
+    selected RHCOS image) and passes it to the main build as `BUILDER_IMAGE`
+    (see `build/README.md` for details).
 
-    ```bash
-    export DOCA_VERSION="3.4.0"
-    export OFED_VERSION="26.04-0.8.5.0"
-    export DOCA_DISTRO="rhel10.2"
-    ```
+### Overriding the defaults
 
-5. Build the container image:
+All versions have defaults in the `Makefile` and can be overridden per
+invocation (as `make` variables or exported environment variables):
 
-    ```bash
-    podman build -f bluefield-ocp.Containerfile \
-      --authfile $PULL_SECRET \
-      --build-arg RHCOS_VERSION=$RHCOS_VERSION \
-      --build-arg TARGET_IMAGE=$TARGET_IMAGE \
-      --build-arg D_DOCA_VERSION=$DOCA_VERSION \
-      --build-arg D_OFED_VERSION=$OFED_VERSION \
-      --build-arg D_DOCA_DISTRO=$DOCA_DISTRO \
-      --tag "bluefield-ocp:$RHCOS_VERSION-latest" .
-    ```
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `OCP_VERSION` | `4.22.0` | OpenShift release the image is built for |
+| `DOCA_VERSION` | `3.4.0` | NVIDIA DOCA version |
+| `OFED_VERSION` | `26.04-0.8.5.0` | NVIDIA OFED version |
+| `DOCA_DISTRO` | `rhel10.2` | DOCA distro path in the repository |
+| `KERNEL_TYPE` | `default` | `64k` selects the 64k page-size kernel |
+| `RHEL_SOURCE` | `rhsm` | `repo-file` overrides `redhat.repo` with `REDHAT_REPO=<path>` |
+| `IMAGE_TAG` | `bluefield-ocp:$OCP_VERSION-latest` | Output image tag |
 
-    Optionally, you can override the DOCA repository baseurl by adding: `-build-arg D_DOCA_BASEURL=<custom_doca_repo_baseurl>` to the above `podman build` command.
+For example:
+
+```bash
+make build OCP_VERSION=4.22.1 KERNEL_TYPE=64k
+```
+
+The repository baseurls can be overridden with `D_DOCA_BASEURL=<url>`, and —
+when the corresponding optionals are enabled — `D_OFED_BASEURL=<url>` /
+`D_SOC_BASEURL=<url>`. Anything else can be passed through
+`EXTRA_BUILD_ARGS="--build-arg NAME=value ..."`; see the `podman build`
+invocation in the `Makefile` for all available build args.
+
+### Firmware version labels
+
+When `PROBE_VERSIONS=true` is passed to `make generate`, the generated
+Containerfile includes `NVIDIA.ATF.version`, `NVIDIA.BSP.version`, and
+`NVIDIA.UEFI.version` labels. The actual values are extracted at build time
+from the argfile.
+
+`make argfile` runs `scripts/probe-versions.sh` automatically to populate
+these values. The script downloads `mlxbf-bootimages-signed` and
+`mlxbf-bfscripts` from the DOCA repository, extracts the firmware files, and
+writes `ATF_VERSION`, `BSP_VERSION`, and `UEFI_VERSION` into the argfile.
+
+```bash
+make generate PROBE_VERSIONS=true
+make argfile PROBE_VERSIONS=true
+# argfile now contains ATF_VERSION=..., BSP_VERSION=..., UEFI_VERSION=...
+```
+
+The probe script requires an aarch64 host (or qemu-user-static) because
+`bfver` is an aarch64 binary.

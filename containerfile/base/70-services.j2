@@ -1,0 +1,4 @@
+#% desc: Enable systemd services and generate info.json
+RUN systemctl enable acpid.service || true; \
+  systemctl enable mlx_ipmid.service || true; \
+  systemctl enable set_emu_param.service || true;

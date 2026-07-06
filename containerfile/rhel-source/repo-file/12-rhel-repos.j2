@@ -1,0 +1,11 @@
+#% desc: RHEL packages from a user-provided redhat.repo (podman secret "redhat-repo")
+# Replace /etc/yum.repos.d/redhat.repo with a file passed as a podman secret
+# instead of relying on host RHSM entitlements. The file can live anywhere
+# (e.g. a parent project embedding this repo); pass it with:
+#   podman build --secret id=redhat-repo,src=<path to redhat.repo> ...
+# It must supply repos pinned to the RHEL minor version matching the RHCOS
+# kernel (the EUS repos that the rhsm variant enables).
+RUN --mount=type=secret,id=redhat-repo \
+  source /etc/os-release && \
+  echo "${VERSION_ID}" > /etc/dnf/vars/releasever && \
+  cp /run/secrets/redhat-repo /etc/yum.repos.d/redhat.repo

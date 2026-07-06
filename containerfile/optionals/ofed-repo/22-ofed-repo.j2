@@ -1,0 +1,32 @@
+#% desc: Dedicated NVIDIA OFED mirror repository
+#% requires: driver-source=prebuilt
+{% if D_OFED_BASEURL_AUTH | default('false') == 'true' %}
+ARG D_OFED_BASEURL_AUTH_CREDS=
+RUN --mount=type=secret,id=d-ofed-baseurl-auth-creds/username-and-password \
+  REPO_URL="{{ D_OFED_BASEURL }}"; \
+  if [ -f /run/secrets/d-ofed-baseurl-auth-creds/username-and-password ]; then \
+  OFED_CREDS=$(cat /run/secrets/d-ofed-baseurl-auth-creds/username-and-password); \
+  elif [ -n "${D_OFED_BASEURL_AUTH_CREDS}" ]; then \
+  OFED_CREDS="${D_OFED_BASEURL_AUTH_CREDS}"; \
+  fi; \
+  if [ -n "$OFED_CREDS" ]; then \
+  REPO_URL=$(echo "$REPO_URL" | sed -E "s|(https?://)(.*)|\1${OFED_CREDS}@\2|"); \
+  fi; \
+  cat <<EOF > /etc/yum.repos.d/ofed.repo
+[ofed]
+name=NVIDIA OFED repository
+baseurl=$REPO_URL
+gpgcheck=0
+enabled=1
+priority=10
+EOF
+{% else %}
+RUN cat <<EOF > /etc/yum.repos.d/ofed.repo
+[ofed]
+name=NVIDIA OFED repository
+baseurl={{ D_OFED_BASEURL }}
+gpgcheck=0
+enabled=1
+priority=10
+EOF
+{% endif %}

@@ -12,3 +12,6 @@ old*
 .vscode
 scratch.txt
 .idea
+*.generated.Containerfile
+**/*/__pycache__
+*argfile.conf

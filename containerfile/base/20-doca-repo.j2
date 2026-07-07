@@ -1,5 +1,6 @@
 #% desc: NVIDIA DOCA dnf repository (with optional auth)
-{% set doca_url = D_DOCA_BASEURL | default('https://linux.mellanox.com/public/repo/doca/' + D_DOCA_VERSION + '/' +
+{% set doca_ver = D_DOCA_URL_VERSION | default(D_DOCA_VERSION) %}
+{% set doca_url = D_DOCA_BASEURL | default('https://linux.mellanox.com/public/repo/doca/' + doca_ver + '/' +
 D_DOCA_DISTRO + '/arm64-dpu/') %}
 {% if D_DOCA_BASEURL_AUTH | default('false') == 'true' %}
 ARG D_DOCA_BASEURL_AUTH_CREDS=

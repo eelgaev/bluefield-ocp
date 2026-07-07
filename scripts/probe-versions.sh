@@ -7,13 +7,14 @@
 #   D_DOCA_VERSION   e.g. 3.4.0
 #   D_DOCA_DISTRO    e.g. rhel10.2
 # Optional:
+#   D_DOCA_URL_VERSION    version used in the URL path (defaults to D_DOCA_VERSION)
 #   D_DOCA_BASEURL        override the default public DOCA repo URL
 #   BOOTIMAGES_PACKAGE    override the default mlxbf-bootimages-signed package name
 set -euo pipefail
 
 : "${D_DOCA_VERSION:?D_DOCA_VERSION is required}"
 : "${D_DOCA_DISTRO:?D_DOCA_DISTRO is required}"
-DOCA_URL="${D_DOCA_BASEURL:-https://linux.mellanox.com/public/repo/doca/${D_DOCA_VERSION}/${D_DOCA_DISTRO}/arm64-dpu/}"
+DOCA_URL="${D_DOCA_BASEURL:-https://linux.mellanox.com/public/repo/doca/${D_DOCA_URL_VERSION:-${D_DOCA_VERSION}}/${D_DOCA_DISTRO}/arm64-dpu/}"
 BOOTIMAGES="${BOOTIMAGES_PACKAGE:-mlxbf-bootimages-signed}"
 
 TMPDIR=$(mktemp -d)

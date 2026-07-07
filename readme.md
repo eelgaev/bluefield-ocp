@@ -39,8 +39,9 @@ driver source or optional can contribute steps at any point of the file:
 - `containerfile/rhel-source/<name>/` — exactly one, chosen with `RHEL_SOURCE`:
   - `rhsm` (default) — RHEL packages via the host's RHSM entitlements.
   - `repo-file` — a user-provided repo file overrides
-    `/etc/yum.repos.d/redhat.repo`; pass it with `REDHAT_REPO=<path>` (it is
-    mounted as a podman secret, so it can live anywhere).
+    `/etc/yum.repos.d/redhat.repo`; pass it with `REDHAT_REPO=<path>` (a path
+    relative to the repo root that is COPYed into the image from the build
+    context, e.g. `../repos/rhel-9.repo`).
 - `containerfile/optionals/<name>/` — zero or more, chosen with `OPTIONALS`.
   To add one, create the directory with a `NN-name.containerfile` file starting with a
   `#% desc: ...` line (`#% requires:` / `#% conflicts:` constraints are also

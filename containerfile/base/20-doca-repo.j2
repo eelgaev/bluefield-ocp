@@ -19,6 +19,7 @@ cat <<EOF > /etc/yum.repos.d/doca.repo
 name=Nvidia DOCA repository
 baseurl=$REPO_URL
 gpgcheck=0
+repo_gpgcheck=1
 enabled=1
 priority=99
 EOF
@@ -29,6 +30,7 @@ cat <<EOF > /etc/yum.repos.d/doca.repo
 name=Nvidia DOCA repository
 baseurl={{ doca_url }}
 gpgcheck=0
+repo_gpgcheck=1
 enabled=1
 priority=99
 EOF

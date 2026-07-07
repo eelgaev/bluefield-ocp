@@ -3,7 +3,7 @@
 DRIVER_SOURCE ?= prebuilt
 # RHEL package source: rhsm (host RHSM entitlements, untouched) or repo-file
 # (REDHAT_REPO overrides /etc/yum.repos.d/redhat.repo in the image; the file
-# is passed as a podman secret, so it may live anywhere — e.g. a parent repo).
+# is COPYed from the build context at build time).
 RHEL_SOURCE   ?= rhsm
 REDHAT_REPO   ?=
 # Space-separated optional features, see `make list`.
@@ -41,6 +41,7 @@ TEMPLATE_ARGS = \
   D_SOC_BASEURL D_SOC_BASEURL_AUTH \
   D_OFED_SRC_TYPE D_OFED_SRC_ARCHIVE DOCA_SOURCES_URL \
   PROBE_VERSIONS \
+  REDHAT_REPO \
   release version
 
 # Credential args forwarded to podman as --build-arg (not baked into the
@@ -92,11 +93,8 @@ build: driver-toolkit-build
 BUILDER_IMAGE_ARG = --build-arg BUILDER_IMAGE=$(DTK_IMAGE)
 endif
 
-# repo-file builds pass the user-provided file as a podman secret, so it can
-# live outside the build context (e.g. in a parent project).
 ifeq ($(RHEL_SOURCE),repo-file)
 build: check-redhat-repo
-REDHAT_REPO_SECRET = --secret id=redhat-repo,src=$(REDHAT_REPO)
 endif
 
 # When PROBE_VERSIONS is set, run the probe once at parse time and capture
@@ -119,7 +117,6 @@ build: generate check-pull-secret
 	  --authfile "$(PULL_SECRET)" \
 	  --build-arg TARGET_IMAGE=$(TARGET_IMAGE) \
 	  $(BUILDER_IMAGE_ARG) \
-	  $(REDHAT_REPO_SECRET) \
 	  $(FORWARDED_BUILD_ARGS) \
 	  $(PROBE_BUILD_ARGS) \
 	  $(EXTRA_BUILD_ARGS) \

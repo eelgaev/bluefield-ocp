@@ -44,6 +44,7 @@ TEMPLATE_ARGS = \
   PROBE_VERSIONS \
   D_DOCA_URL_VERSION \
   REDHAT_REPO \
+  ASSETS_DIR \
   release version
 
 # Credential args forwarded to podman as --build-arg (not baked into the

@@ -1,5 +1,5 @@
 #% desc: Asset installation: udev rules, SELinux module, IPMI SDR, BFB scripts
-RUN --mount=type=bind,source=assets,target=/tmp/assets \
+RUN --mount=type=bind,source={{ ASSETS_DIR | default('assets') }},target=/tmp/assets \
 # Copy OFED udev rules
 cp /usr/share/doc/mlnx-ofa_kernel/vf-net-link-name.sh /etc/infiniband/vf-net-link-name.sh && \
 cp /usr/share/doc/mlnx-ofa_kernel/82-net-setup-link.rules /usr/lib/udev/rules.d/82-net-setup-link.rules && \

@@ -42,6 +42,7 @@ done
 BFB="$EXTRACT/lib/firmware/mellanox/boot/default.bfb"
 CAPSULE="$EXTRACT/lib/firmware/mellanox/boot/capsule/boot_update2.cap"
 BFVER="$EXTRACT/usr/bin/bfver"
+export PATH="$EXTRACT/usr/bin:$PATH"
 
 bfver_out="$("$BFVER" --file "$BFB")"
 

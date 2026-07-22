@@ -29,4 +29,7 @@ RUN \
   cp -rnv /tmp/bf-release/* /; \
   echo "bf-bundle-{{ D_DOCA_VERSION }}_rhcos{{ OCP_VERSION }}" > /etc/mlnx-release; \
   #
+  dnf download doca-runtime && \
+  rpm --nodeps -ivh doca-runtime-*.aarch64.rpm; \
+  #
   dnf clean all

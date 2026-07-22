@@ -1,6 +1,5 @@
 #% desc: Builder stage: compile OFED and BlueField SoC kernel modules from source
-#% requires-args: BUILDER_IMAGE
-FROM ${BUILDER_IMAGE} AS builder
+FROM {{ BUILDER_IMAGE }} AS builder
 {% set doca_sources_url = DOCA_SOURCES_URL | default('https://linux.mellanox.com/public/repo/doca/' + (D_DOCA_URL_VERSION | default(D_DOCA_VERSION)) + '/SOURCES') %}
 {% set ofed_src_archive = D_OFED_SRC_ARCHIVE | default('MLNX_OFED_SRC-' + (D_OFED_SRC_TYPE | default('')) + D_OFED_VERSION + '.tgz') %}
 

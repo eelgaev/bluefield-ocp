@@ -15,5 +15,8 @@ RUN dnf -y install --setopt=install_weak_deps=False \
   # SOC Drivers:
   kmod-mlxbf-pka \
   kmod-ipmb-host && \
+  #
+  dnf download doca-runtime-kernel && \
+  rpm --nodeps -ivh doca-runtime-kernel-*.aarch64.rpm && \
   # 
   dnf clean all

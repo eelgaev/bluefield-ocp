@@ -1,4 +1,9 @@
 #% desc: Install kernel-module RPMs compiled in the builder stage
 RUN --mount=type=bind,from=builder,source=/root/rpms,target=/tmp/built-rpms \
   ls /tmp/built-rpms && \
-  rpm -ivh --nodeps /tmp/built-rpms/*.rpm
+  rpm -ivh --nodeps /tmp/built-rpms/*.rpm && \
+  dnf download doca-runtime-kernel && \
+  rpm --nodeps -ivh doca-runtime-kernel-*.aarch64.rpm && \
+  dnf clean all
+
+

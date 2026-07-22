@@ -19,9 +19,8 @@ OFED_VERSION  ?= 26.04-0.8.5.0
 RHEL_MAJOR    := $(shell [ $$(echo '$(OCP_VERSION)' | cut -d. -f2) -ge 22 ] && echo 10 || echo 9)
 DOCA_DISTRO   ?= rhel10.2
 
-# Both generated files land in the directory make is invoked from.
+# The generated Containerfile lands in the directory make is invoked from.
 CONTAINERFILE ?= bluefield-ocp.generated.Containerfile
-ARGFILE       ?= argfile.conf
 
 # Space-separated extra fragment roots (same layout as containerfile/),
 # overlaid on top of the public fragments — e.g. a private directory in a
@@ -31,10 +30,13 @@ EXTRA_DIRS ?=
 EXTRA_DIR_FLAGS = $(foreach dir,$(EXTRA_DIRS),--extra-dir $(dir))
 IMAGE_TAG     ?= bluefield-ocp:$(OCP_VERSION)-latest
 DTK_IMAGE     ?= localhost/driver-toolkit:$(OCP_VERSION)
+BUILDER_IMAGE ?= $(DTK_IMAGE)
 
 # Template variables forwarded to generate.py via --set when set.
 # These are baked into the generated Containerfile at generate time.
 TEMPLATE_ARGS = \
+  TARGET_IMAGE BUILDER_IMAGE \
+  ATF_VERSION BSP_VERSION UEFI_VERSION \
   BLUEFIELD_OCP_VERSION BLUEFIELD_OCP_BRANCH \
   BOOTIMAGES_PACKAGE FW_PACKAGE BMC_FW_PACKAGES \
   D_DOCA_BASEURL D_DOCA_BASEURL_AUTH \
@@ -53,13 +55,13 @@ BUILD_ONLY_ARGS = D_DOCA_BASEURL_AUTH_CREDS D_OFED_BASEURL_AUTH_CREDS D_SOC_BASE
 FORWARDED_BUILD_ARGS = $(foreach v,$(BUILD_ONLY_ARGS),$(if $($(v)),--build-arg $(v)="$($(v))"))
 EXTRA_BUILD_ARGS ?=
 
-# Resolved lazily (only when a build target actually runs).
+# Resolved lazily via $(shell) — only evaluated when referenced.
 OCP_RELEASE_IMAGE ?= quay.io/openshift-release-dev/ocp-release:$(OCP_VERSION)-aarch64
 RHCOS_VARIANT    := $(if $(filter 10,$(RHEL_MAJOR)),rhel-coreos-10,rhel-coreos)
 TARGET_IMAGE   ?= $(shell oc adm release info --image-for $(RHCOS_VARIANT) "$(OCP_RELEASE_IMAGE)")
 KERNEL_VERSION ?= $(shell podman run --authfile "$(PULL_SECRET)" --rm --entrypoint /bin/sh "$(TARGET_IMAGE)" -c 'ls /lib/modules | sort -V | tail -1')
 
-.PHONY: help list generate build argfile driver-toolkit-build check-redhat-repo check-pull-secret clean
+.PHONY: help list generate build driver-toolkit-build check-redhat-repo check-pull-secret clean
 .DEFAULT_GOAL := help
 
 help:
@@ -67,9 +69,8 @@ help:
 	@echo "  make generate [DRIVER_SOURCE=prebuilt|source] [RHEL_SOURCE=rhsm|repo-file] [OPTIONALS=\"...\"]"
 	@echo "  make build    [DRIVER_SOURCE=prebuilt|source] [RHEL_SOURCE=rhsm|repo-file REDHAT_REPO=<path>] PULL_SECRET=<path>"
 	@echo "  make driver-toolkit-build    build $(DTK_IMAGE) for source builds (skipped if it exists)"
-	@echo "  make argfile           write resolved build args to $(ARGFILE) for manual podman builds"
 	@echo "  make list              show driver sources and optionals"
-	@echo "  make clean             remove the generated files"
+	@echo "  make clean             remove the generated Containerfile"
 	@echo "variables: OCP_VERSION DOCA_VERSION OFED_VERSION DOCA_DISTRO KERNEL_TYPE IMAGE_TAG"
 	@echo "           EXTRA_DIRS=\"<dir> ...\"  overlay private/extra fragment roots"
 
@@ -94,7 +95,6 @@ generate:
 # Source builds need a builder image with the exact RHCOS kernel packages.
 ifeq ($(DRIVER_SOURCE),source)
 build: driver-toolkit-build
-BUILDER_IMAGE_ARG = --build-arg BUILDER_IMAGE=$(DTK_IMAGE)
 endif
 
 ifeq ($(RHEL_SOURCE),repo-file)
@@ -112,7 +112,6 @@ PROBE_OUTPUT := $(shell D_DOCA_VERSION=$(DOCA_VERSION) D_DOCA_DISTRO=$(DOCA_DIST
 ATF_VERSION  := $(word 2,$(subst =, ,$(filter ATF_VERSION=%,$(PROBE_OUTPUT))))
 BSP_VERSION  := $(word 2,$(subst =, ,$(filter BSP_VERSION=%,$(PROBE_OUTPUT))))
 UEFI_VERSION := $(word 2,$(subst =, ,$(filter UEFI_VERSION=%,$(PROBE_OUTPUT))))
-PROBE_BUILD_ARGS = --build-arg ATF_VERSION=$(ATF_VERSION) --build-arg BSP_VERSION=$(BSP_VERSION) --build-arg UEFI_VERSION=$(UEFI_VERSION)
 endif
 check-redhat-repo:
 	@test -f "$(REDHAT_REPO)" || { echo "ERROR: RHEL_SOURCE=repo-file needs REDHAT_REPO=<path to a redhat.repo file>" >&2; exit 1; }
@@ -120,19 +119,13 @@ check-redhat-repo:
 build: generate check-pull-secret
 	podman build -f $(CONTAINERFILE) \
 	  --authfile "$(PULL_SECRET)" \
-	  --build-arg TARGET_IMAGE=$(TARGET_IMAGE) \
-	  $(BUILDER_IMAGE_ARG) \
 	  $(FORWARDED_BUILD_ARGS) \
-	  $(PROBE_BUILD_ARGS) \
 	  $(EXTRA_BUILD_ARGS) \
 	  --tag "$(IMAGE_TAG)" .
 
 # Build the driver-toolkit builder image unless it already exists (the tag
 # embeds OCP_VERSION, so a version bump still gets a fresh build; run
-# `podman rmi $(DTK_IMAGE)` to force one). The branch is selected with make's
-# $(if), which only expands the chosen branch, so the expensive
-# KERNEL_VERSION/TARGET_IMAGE discovery ($(shell oc/podman ...)) is not
-# evaluated when the image is already present.
+# `podman rmi $(DTK_IMAGE)` to force one).
 # The kernel version is discovered from the RHCOS image of the release payload
 # (see build/README.md). --arch=arm64 so cross-builds pick aarch64 kernel
 # packages (requires qemu-user-static-binfmt on non-aarch64 hosts).
@@ -144,21 +137,8 @@ driver-toolkit-build: check-pull-secret
 	  --build-arg KERNEL_VERSION="$(KERNEL_VERSION)" \
 	  --tag "$(DTK_IMAGE)" .)
 
-# Write the resolved build args as a podman --build-arg-file, for manual
-# builds: podman build --build-arg-file $(ARGFILE) -f $(CONTAINERFILE) ...
-argfile:
-	@umask 077; printf '%s\n' \
-	  "TARGET_IMAGE=$(TARGET_IMAGE)" \
-	  $(if $(BUILDER_IMAGE_ARG),"BUILDER_IMAGE=$(DTK_IMAGE)") \
-	  $(foreach v,$(BUILD_ONLY_ARGS),$(if $($(v)),"$(v)=$($(v))")) \
-	  $(if $(ATF_VERSION),"ATF_VERSION=$(ATF_VERSION)") \
-	  $(if $(BSP_VERSION),"BSP_VERSION=$(BSP_VERSION)") \
-	  $(if $(UEFI_VERSION),"UEFI_VERSION=$(UEFI_VERSION)") \
-	  > $(ARGFILE)
-	@echo "wrote $(ARGFILE)"
-
 check-pull-secret:
 	@test -n "$(PULL_SECRET)" || { echo "ERROR: set PULL_SECRET=<path to OpenShift pull secret>" >&2; exit 1; }
 
 clean:
-	rm -f $(CONTAINERFILE) $(ARGFILE)
+	rm -f $(CONTAINERFILE)

@@ -9,5 +9,7 @@ RUN set -xe; kver=$(ls /usr/lib/modules | sort -V | tail -1); env DRACUT_NO_XATT
   rm -rf /var/cache/* /var/log/* /etc/machine-id && \
   find /usr/share/locale -mindepth 1 -maxdepth 1 ! -name 'en' ! -name 'en_US' -exec rm -rf {} + && \
   rm -rf /usr/share/man /usr/share/doc /usr/share/vim && \
+{% if UPDATE_PCIIDS | default('true') == 'true' %}
   update-pciids && \
+{% endif %}
   ostree container commit

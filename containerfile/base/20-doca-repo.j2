@@ -2,7 +2,9 @@
 {% set doca_ver = D_DOCA_URL_VERSION | default(D_DOCA_VERSION) %}
 {% set doca_url = D_DOCA_BASEURL | default('https://linux.mellanox.com/public/repo/doca/' + doca_ver + '/' +
 D_DOCA_DISTRO + '/arm64-dpu/') %}
-{% if D_DOCA_BASEURL_AUTH | default('false') == 'true' %}
+{% if DOCA_REPO_OMIT | default('false') == 'true' %}
+RUN mkdir -p /tmp/rpms
+{% elif D_DOCA_BASEURL_AUTH | default('false') == 'true' %}
 ARG D_DOCA_BASEURL_AUTH_CREDS=
 RUN --mount=type=secret,id=d-doca-baseurl-auth-creds/username-and-password \
 mkdir -p /tmp/rpms; \

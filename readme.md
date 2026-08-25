@@ -100,9 +100,10 @@ make build OCP_VERSION=4.22.1 KERNEL_TYPE=64k
 
 The repository baseurls can be overridden with `D_DOCA_BASEURL=<url>`, and —
 when the corresponding optionals are enabled — `D_OFED_BASEURL=<url>` /
-`D_SOC_BASEURL=<url>`. Anything else can be passed through
-`EXTRA_BUILD_ARGS="--build-arg NAME=value ..."`; see the `podman build`
-invocation in the `Makefile` for all available build args.
+`D_SOC_BASEURL=<url>`. Pass `DOCA_REPO_OMIT=true` to skip writing
+`/etc/yum.repos.d/doca.repo` into the image (default: `false`). Anything else
+can be passed through `EXTRA_BUILD_ARGS="--build-arg NAME=value ..."`; see the
+`podman build` invocation in the `Makefile` for all available build args.
 
 ### Firmware version labels
 

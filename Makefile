@@ -15,8 +15,10 @@ DOCA_VERSION      ?= 3.4.0
 DOCA_URL_VERSION  ?=
 OFED_VERSION  ?= 26.04-0.8.5.0
 
-# OCP 4.22+ ships RHEL 10; earlier releases ship RHEL 9.
-RHEL_MAJOR    := $(shell [ $$(echo '$(OCP_VERSION)' | cut -d. -f2) -ge 22 ] && echo 10 || echo 9)
+# OCP 4.22+ (and all of 5.x) ship RHEL 10; earlier releases ship RHEL 9.
+OCP_MAJOR     := $(shell echo '$(OCP_VERSION)' | cut -d. -f1)
+OCP_MINOR     := $(shell echo '$(OCP_VERSION)' | cut -d. -f2 | cut -d- -f1)
+RHEL_MAJOR    := $(shell { [ $(OCP_MAJOR) -ge 5 ] || { [ $(OCP_MAJOR) -eq 4 ] && [ $(OCP_MINOR) -ge 22 ]; }; } && echo 10 || echo 9)
 DOCA_DISTRO   ?= rhel10.2
 
 # The generated Containerfile lands in the directory make is invoked from.
@@ -29,7 +31,19 @@ CONTAINERFILE ?= bluefield-ocp.generated.Containerfile
 EXTRA_DIRS ?=
 EXTRA_DIR_FLAGS = $(foreach dir,$(EXTRA_DIRS),--extra-dir $(dir))
 IMAGE_TAG     ?= bluefield-ocp:$(OCP_VERSION)-latest
+
+# Resolved lazily via $(shell) — only evaluated when referenced.
+OCP_RELEASE_IMAGE ?= quay.io/openshift-release-dev/ocp-release:$(OCP_VERSION)-aarch64
+
+# OCP 5.0+ ships driver-toolkit-10 in the release payload, so use it directly.
+# Earlier releases have no RHEL 10 driver-toolkit there (it was missing in
+# 4.22), so we build our own from build/driver-toolkit.containerfile.
+PAYLOAD_DTK   := $(shell [ $(OCP_MAJOR) -ge 5 ] && echo y)
+ifeq ($(PAYLOAD_DTK),y)
+DTK_IMAGE     ?= $(shell oc adm release info --image-for driver-toolkit-10 "$(OCP_RELEASE_IMAGE)")
+else
 DTK_IMAGE     ?= localhost/driver-toolkit:$(OCP_VERSION)
+endif
 BUILDER_IMAGE ?= $(DTK_IMAGE)
 
 # Template variables forwarded to generate.py via --set when set.
@@ -57,8 +71,6 @@ BUILD_ONLY_ARGS = D_DOCA_BASEURL_AUTH_CREDS D_OFED_BASEURL_AUTH_CREDS D_SOC_BASE
 FORWARDED_BUILD_ARGS = $(foreach v,$(BUILD_ONLY_ARGS),$(if $($(v)),--build-arg $(v)="$($(v))"))
 EXTRA_BUILD_ARGS ?=
 
-# Resolved lazily via $(shell) — only evaluated when referenced.
-OCP_RELEASE_IMAGE ?= quay.io/openshift-release-dev/ocp-release:$(OCP_VERSION)-aarch64
 RHCOS_VARIANT    := $(if $(filter 10,$(RHEL_MAJOR)),rhel-coreos-10,rhel-coreos)
 TARGET_IMAGE   ?= $(shell oc adm release info --image-for $(RHCOS_VARIANT) "$(OCP_RELEASE_IMAGE)")
 KERNEL_VERSION ?= $(shell podman run --authfile "$(PULL_SECRET)" --rm --entrypoint /bin/sh "$(TARGET_IMAGE)" -c 'ls /lib/modules | sort -V | tail -1')
@@ -70,7 +82,8 @@ help:
 	@echo "targets:"
 	@echo "  make generate [DRIVER_SOURCE=prebuilt|source] [RHEL_SOURCE=rhsm|repo-file] [OPTIONALS=\"...\"]"
 	@echo "  make build    [DRIVER_SOURCE=prebuilt|source] [RHEL_SOURCE=rhsm|repo-file REDHAT_REPO=<path>] PULL_SECRET=<path>"
-	@echo "  make driver-toolkit-build    build $(DTK_IMAGE) for source builds (skipped if it exists)"
+	@echo "  make driver-toolkit-build    build $(DTK_IMAGE) for source builds (skipped if it exists;"
+	@echo "                               OCP 5.0+ uses the payload driver-toolkit-10 image instead)"
 	@echo "  make list              show driver sources and optionals"
 	@echo "  make clean             remove the generated Containerfile"
 	@echo "variables: OCP_VERSION DOCA_VERSION OFED_VERSION DOCA_DISTRO KERNEL_TYPE IMAGE_TAG"
@@ -95,6 +108,7 @@ generate:
 	  --output $(CONTAINERFILE)
 
 # Source builds need a builder image with the exact RHCOS kernel packages.
+# For OCP 5.0+ the payload already provides one (driver-toolkit-10).
 ifeq ($(DRIVER_SOURCE),source)
 build: driver-toolkit-build
 endif
@@ -125,6 +139,13 @@ build: generate check-pull-secret
 	  $(EXTRA_BUILD_ARGS) \
 	  --tag "$(IMAGE_TAG)" .
 
+# OCP 5.0+: driver-toolkit-10 comes from the release payload; just verify the
+# reference resolved (needs oc auth for the payload).
+ifeq ($(PAYLOAD_DTK),y)
+driver-toolkit-build:
+	@test -n "$(DTK_IMAGE)" || { echo "ERROR: could not resolve driver-toolkit-10 from $(OCP_RELEASE_IMAGE) — is 'oc' logged in?" >&2; exit 1; }
+	@echo "Using payload driver-toolkit: $(DTK_IMAGE)"
+else
 # Build the driver-toolkit builder image unless it already exists (the tag
 # embeds OCP_VERSION, so a version bump still gets a fresh build; run
 # `podman rmi $(DTK_IMAGE)` to force one).
@@ -138,6 +159,7 @@ driver-toolkit-build: check-pull-secret
 	  --arch=arm64 \
 	  --build-arg KERNEL_VERSION="$(KERNEL_VERSION)" \
 	  --tag "$(DTK_IMAGE)" .)
+endif
 
 check-pull-secret:
 	@test -n "$(PULL_SECRET)" || { echo "ERROR: set PULL_SECRET=<path to OpenShift pull secret>" >&2; exit 1; }

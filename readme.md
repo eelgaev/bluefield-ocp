@@ -71,11 +71,16 @@ driver source or optional can contribute steps at any point of the file:
     `make` resolves the RHCOS image for the selected OpenShift release from the
     release payload and tags the result as `bluefield-ocp:$OCP_VERSION-latest`.
 
-    With `DRIVER_SOURCE=source`, `make` first builds
-    `build/driver-toolkit.containerfile` as
-    `localhost/driver-toolkit:$OCP_VERSION` (against the exact kernel of the
-    selected RHCOS image) and passes it to the main build as `BUILDER_IMAGE`
-    (see `build/README.md` for details).
+    With `DRIVER_SOURCE=source`, the builder image (`BUILDER_IMAGE`) is
+    chosen by release:
+
+    - **OCP 5.0+** — the release payload ships `driver-toolkit-10`; `make`
+      resolves it with `oc adm release info --image-for driver-toolkit-10`
+      and uses it directly.
+    - **Earlier releases** (no driver-toolkit-10 in the payload) — `make`
+      first builds `build/driver-toolkit.containerfile` as
+      `localhost/driver-toolkit:$OCP_VERSION` (against the exact kernel of
+      the selected RHCOS image) (see `build/README.md` for details).
 
 ### Overriding the defaults
 

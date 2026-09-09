@@ -3,6 +3,12 @@
 This directory contains `driver-toolkit.containerfile`, which can build a
 driver-toolkit image for a specific OpenShift release.
 
+> [!note]
+> This is only needed for releases whose payload has no driver-toolkit for
+> the RHEL version in use (e.g. 4.22, where `driver-toolkit-10` did not
+> exist). OCP 5.0+ ships `driver-toolkit-10` in the release payload and the
+> Makefile uses that image directly.
+
 The build should use `OCP_VERSION` as the source of truth. Resolve the
 matching RHCOS image from the OpenShift release payload, inspect `/lib/modules`
 in that image, and pass the discovered `KERNEL_VERSION` into the local

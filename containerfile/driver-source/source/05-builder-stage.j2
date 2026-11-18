@@ -1,60 +1,100 @@
 #% desc: Builder stage: compile OFED and BlueField SoC kernel modules from source
 FROM {{ BUILDER_IMAGE }} AS builder
 {% set doca_sources_url = DOCA_SOURCES_URL | default('https://linux.mellanox.com/public/repo/doca/' + (D_DOCA_URL_VERSION | default(D_DOCA_VERSION)) + '/SOURCES') %}
-{% set ofed_src_archive = D_OFED_SRC_ARCHIVE | default('MLNX_OFED_SRC-' + (D_OFED_SRC_TYPE | default('')) + D_OFED_VERSION + '.tgz') %}
+{% set ofed_src_archive = D_OFED_SRC_ARCHIVE | default('DOCA_BASE_SRC-' + (D_OFED_SRC_TYPE | default('')) + D_OFED_VERSION + '.tar.gz') %}
 
 WORKDIR /root
 {% if KERNEL_TYPE == '64k' %}
 
-RUN KVER=$(ls /usr/lib/modules | grep 64k | head -n1) && \
+RUN \
+  KVER=$(ls /usr/lib/modules | grep 64k | head -n1) && \
   echo "KVER=$KVER" >> /kernelver.env
 {% else %}
 
-RUN KVER=$(ls /usr/lib/modules | grep -v 64k | head -n1) && \
+RUN \
+  KVER=$(ls /usr/lib/modules | grep -v 64k | head -n1) && \
   echo "KVER=$KVER" >> /kernelver.env
 {% endif %}
 
-RUN dnf install -y automake autoconf libtool perl wget file && dnf clean all
+# EPEL is now required to get the dkms package, we are also disabling module signing.
 
-RUN wget --no-check-certificate -O {{ ofed_src_archive }} {{ doca_sources_url }}/mlnx_ofed/{{ ofed_src_archive }}; \
+RUN \
+  dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm && \
+  dnf install -y automake autoconf libtool perl wget file && \
+  dnf install -y dkms && \
+  dnf clean all && \
+  echo 'try_sign_modules=false' > /etc/dkms/framework.conf
+
+RUN \
+  wget --no-check-certificate -O {{ ofed_src_archive }} {{ doca_sources_url }}/mlnx_ofed/{{ ofed_src_archive }}; \
   if [ $? -ne 0 ]; then \
   wget --no-check-certificate -O {{ ofed_src_archive }} {{ doca_sources_url }}/MLNX_OFED/{{ ofed_src_archive }}; \
   fi
 
-RUN if file {{ ofed_src_archive }} | grep compressed; then \
-  tar -xzf {{ ofed_src_archive }}; \
-  else \
-  mv {{ ofed_src_archive }}/MLNX_OFED_SRC-{{ D_OFED_VERSION }} . ; \
-  fi
+RUN \
+  tar -xzf {{ ofed_src_archive }};
 
-RUN set -x && \
+RUN \
+  set -x && \
   source /kernelver.env && \
-  perl /root/MLNX_OFED_SRC-{{ D_OFED_VERSION }}/install.pl --without-depcheck --distro rhel --kernel ${KVER} --kernel-sources /lib/modules/${KVER}/build \
-  --kernel-only --build-only \
-  --with-iser --with-srp --with-isert --with-knem --with-xpmem --fwctl \
-  --with-mlnx-tools --with-ofed-scripts --copy-ifnames-udev
+  cd DOCA_BASE_SRC-{{ D_OFED_VERSION }} && \
+  \
+  SRPMS=("kernel-mft" "iser" "isert" "xpmem" "mlnx-nfsrdma" "mlnx-nvme" "srp" "virtiofs" "mlnx-ofa_kernel") && \
+  \
+  for srpm in "${SRPMS[@]}"; do \
+    MAKEFLAGS="-j$(nproc)" rpmbuild --rebuild "$srpm"-*.src.rpm \
+      --define 'KMP 1' \
+      --define "KVERSION $KVER" \
+      --define "_sourcedir $(pwd)" \
+      --define 'debug_package %{nil}' || exit 1; \
+  done
 
-RUN mkdir -p /build/rpmbuild/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
+# We are building with KMP 1 even if most packages have moved to DKMS;
+# kmod-mft is still a kmod RPM we want to handle, and setting those RPM variables don't seem to break anything.
 
-ENV HOME=/build
+RUN \
+  set -x && \
+  source /kernelver.env && \
+  rpm -i \
+  /root/rpmbuild/RPMS/aarch64/iser-dkms-*.aarch64.rpm \
+  /root/rpmbuild/RPMS/aarch64/isert-dkms-*.aarch64.rpm \
+  /root/rpmbuild/RPMS/aarch64/xpmem-dkms-*.aarch64.rpm \
+  /root/rpmbuild/RPMS/aarch64/mlnx-ofa_kernel-dkms-*.aarch64.rpm \
+  /root/rpmbuild/RPMS/aarch64/mlnx-ofa_kernel-source-*.aarch64.rpm \
+  /root/rpmbuild/RPMS/aarch64/mlnx-nfsrdma-dkms-*.aarch64.rpm \
+  /root/rpmbuild/RPMS/aarch64/mlnx-nvme-dkms-*.aarch64.rpm \
+  /root/rpmbuild/RPMS/aarch64/srp-dkms-*.aarch64.rpm \
+  /root/rpmbuild/RPMS/aarch64/virtiofs-dkms-*.aarch64.rpm \
+  && \
+  dkms_modules=$(dkms status | awk '{print $1}' | tr -d ':,') && \
+  ofa_module=$(echo "$dkms_modules" | grep '^mlnx-ofa_kernel/') && \
+  MAKEFLAGS="-j$(nproc)" dkms install "$ofa_module" -k "$KVER" && \
+  for module in $dkms_modules; do \
+    [ "$module" = "$ofa_module" ] && continue; \
+    dkms install "$module" -k "$KVER" || exit 1; \
+  done
 
-WORKDIR /root
-
-RUN SRPMS=("mlxbf-pka" "ipmb-host") && \
+RUN \
+  SRPMS=("mlxbf-pka" "ipmb-host") && \
   wget -r -np -nd -A rpm -e robots=off "{{ doca_sources_url }}/SoC/" --accept-regex="$(IFS='|'; echo "(${SRPMS[*]/%/.+\.rpm})")"
 
-RUN source /kernelver.env && \
+RUN \
+source /kernelver.env && \
   for package in *.src.rpm; do \
   rpmbuild --rebuild $package --define 'KMP 1' --define "KVERSION $KVER" --define "_sourcedir $(pwd)" --define "debug_package %{nil}" || exit 1; \
   rm -f $package; \
   done
 
-RUN ls /root/MLNX_OFED_SRC-{{ D_OFED_VERSION }}/RPMS/redhat-release-*/aarch64
-
-RUN cd /root/MLNX_OFED_SRC-{{ D_OFED_VERSION }}/RPMS/redhat-release-*/aarch64 && \
-  rm -f *-devel*.rpm *-debugsource*.rpm *-debuginfo*.rpm *-source*.rpm && \
-  rm -f xpmem-*.rpm knem-*.rpm && \
-  mkdir /root/rpms && \
-  mv *.rpm /root/rpms && \
-  mv /build/rpmbuild/RPMS/aarch64/*.rpm /root/rpms
+RUN \
+  set -x && \
+  source /kernelver.env && \
+  mkdir /root/rpms /root/kmods && \
+  RPMS_COPY_LIST=("kmod-kernel-mft-mlnx" "mlnx-ofa_kernel" "kmod-mlxbf-pka" "kmod-ipmb-host") && \
+  for rpm in "${RPMS_COPY_LIST[@]}"; do \
+    cp /root/rpmbuild/RPMS/aarch64/"$rpm"-*.rpm /root/rpms/ || exit 1; \
+  done && \
+  rm -rf /root/rpms/*-source*.rpm /root/rpms/*-debug*.rpm /root/rpms/*-devel*.rpm /root/rpms/*-dkms*.rpm && \
+  \
+  cp /lib/modules/$KVER/extra/* /root/kmods
+  
 ######################################################################

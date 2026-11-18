@@ -1,5 +1,8 @@
 #% desc: Install the common DOCA userspace package set
-RUN dnf -y install --setopt=install_weak_deps=False \
+
+RUN \
+  dnf remove -y libibverbs rdma-core && \
+  dnf -y install --setopt=install_weak_deps=False \
   doca-runtime-user \
   collectx-clxapi \
   doca-apsh-config \
@@ -13,7 +16,6 @@ RUN dnf -y install --setopt=install_weak_deps=False \
   doca-openvswitch-test \
   doca-pcc-counters \
   doca-sdk-aes-gcm \
-  doca-sdk-apsh \
   doca-sdk-argp \
   doca-sdk-comch \
   doca-sdk-common \
